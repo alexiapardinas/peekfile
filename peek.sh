@@ -1,4 +1,5 @@
 input_file="$1"
-head -n 3 $input_file
+lines="$2"
+head -n $lines $input_file
 echo ...
-tail -n 3 $input_file
+tail -n $lines $input_file
