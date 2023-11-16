@@ -1,13 +1,13 @@
 # Define optional arguments
 folder=$1
-nlines=$2
+N=$2
 
 # Default arguments
 if [[ -z $folder ]]; then 
 folder="."
 fi
 
-if [[ -z $nlines ]]; then 
+if [[ -z $N ]]; then 
 nlines=0
 fi
 
@@ -18,9 +18,9 @@ fastafind=$(find $folder -type f -name "*.fa" -or -name "*.fasta")
 echo Number of files: $(echo $fastafind | wc -w)
 
 # Count unique IDs in each fasta file
-count=0
 for fa in $fastafind; do 
-grep ">" $fa | awk '{print $1}' | sed 's/>//' | sort | uniq | wc -l >> numID
+# Get the ID lines, isolate the IDs (taking into account if : before the ID) and count unique occurrences
+awk '/>/{if(index($0,":")!=0) split ($1, A, /:/); else A[2]=$1; print A[2]}' $fa | sed 's/>//' | sort | uniq | wc -l >> numID
 done
 # Sum all the counted IDs
 awk '{n=n+$1} END {print "Unique fasta IDs: " n}' numID
@@ -31,8 +31,8 @@ rm numID
 for file in $fastafind; do
 
 # HEADER
-# Filename
-echo == ${file##*/}
+# Filename (without the relative path)
+echo == $(echo $file | grep -oE '[^/]+$')
 # Symlink or not
 if [[ -h $file ]]; then 
 echo Symlink
@@ -41,23 +41,26 @@ fi
 # Number of sequences
 echo Number of sequences: $(grep -c ">" $file)
 # Total sequence length (aa or nt, without gaps, newlines and spaces)
-echo Total sequence length: $(grep -v ">" $file | tr -d '\n' | sed 's/ //g; s/-//g' | wc -c)
-# Nucleotide or amino acid sequence
-if grep -v ">" $file | grep -q "[DEFGHIKLMPQRSVWY]"; then
+sequence=$(awk '!/>/{gsub(/-/, "", $0); gsub(/ /, "", $0); print $0}' $file | tr -d '\n') 
+echo Total sequence length: $(( $(echo $sequence | wc -c) - 1))
+# Nucleotides or amino acid sequence
+if grep -qE "[RDQEHILKMFPSWYV]*" <<< "$sequence"; then
 echo Amino acid sequence
-elif grep -v ">" $file | grep -qi "[AGCTN]"; then 
+elif grep -qE "[ACTGNactgn]*" <<< "$sequence"; then
 echo Nucleotide sequence
+else
+echo Unknown sequence type
 fi
 
 # CONTENT
 num_lines=$(wc -l < $file)
 # Print full content if file lines are fewer than twice the number of lines asked
-if [[ $num_lines -le $((2 * nlines)) ]]; then 
+if [[ $num_lines -le $((2 * N)) ]]; then 
 cat $file
-elif [[ $nlines == 0 ]]; then 
+elif [[ $N == 0 ]]; then
 continue
 else 
-head -n $nlines $file; echo ...; tail -n $nlines $file
+head -n $N $file; echo ...; tail -n $N $file
 fi
 echo
 done
