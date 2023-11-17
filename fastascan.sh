@@ -14,32 +14,28 @@ else
 N=$2
 fi
 
-# Find all fa and fasta files in current folder and subfolders
-fastafind=$(find $folder -type f -name "*.fa" -or -name "*.fasta")
+# Find all fa and fasta files/symlinks in current folder and subfolders (non hidden files)
+fastafind=$(find $folder -name "*.fa" -not -path '*/.*' -or -name "*.fasta" -not -path '*/.*')
 
 # RESULT SUMMARY
 echo == RESULT SEARCH SUMMARY ==
 # Count how many files
 echo Number of files: $(echo $fastafind | wc -w)
+
 # Count how many unique IDs
-for fa in $fastafind; do
 # Get the ID lines, isolate the IDs (taking into account if : before the ID) and count unique occurrences
-awk '/>/{if(index($0,":")!=0) split ($1, A, /:/); else A[2]=$1; print A[2]}' $fa | sed 's/>//' | sort | uniq | wc -l >> numID
-done
+awk '/>/{if(index($0,":")!=0) split ($1, A, /:/); else A[2]=$1; print A[2]}' $fastafind | sed 's/>//' | sort | uniq | wc -l > numID
 # Sum all the counted IDs
-awk '{n=n+$1} END {print "Unique fasta IDs: " n}' numID
+echo Unique fasta IDs: $(cat numID)
 # Remove the temporarily created file
 rm numID
 
 # FILE SUMMARY REPORT
 echo ; echo == FILES SUMMARY REPORT ==
 for file in $fastafind; do
-
 # HEADER
-# Filename without the relative path (all characters after the last /)
-filename=$(echo $file | grep -oE '[^/]+$')
-# Only read non hidden files
-if [[ ! $filename =~ ^\. ]]; then
+# Filename without the relative path
+filename=$(basename $file)
 # Symlink or not
 if [[ -h $file ]]; then 
 symlink="Symlink"
@@ -51,9 +47,9 @@ numsequences=$(grep -c ">" $file)
 sequence=$(awk '!/>/{gsub(/-/, "", $0); gsub(/ /, "", $0); print $0}' $file | tr -d '\n') 
 seqlength=$(( $(echo $sequence | wc -c) - 1))
 # Nucleotides or amino acid sequence
-if echo "$sequence" | grep -qE "[DEFHIKLMNPQRSVWY]"; then
+if echo "$sequence" | grep -qiE "[DEFHIKLMPQRSVWY]"; then
 seqtype="Amino acid"
-elif echo "$sequence" | grep -qE "[ACTGNactgn]"; then
+elif echo "$sequence" | grep -qiE "[ACTGN]"; then
 seqtype="Nucleotide"
 else
 seqtype="Unknown"
@@ -70,7 +66,7 @@ echo File content:
 cat $file
 echo
 # Do not print anything if the number of lines asked is 0
-elif [[ $N == 0 ]]; then
+elif [[ $N -eq 0 ]]; then
 echo
 continue
 # Print the first and last lines if file lines are more than twice the number of lines asked
@@ -78,6 +74,5 @@ else
 echo File content:
 head -n $N $file; echo ...; tail -n $N $file
 echo
-fi
 fi
 done
